@@ -1,0 +1,17 @@
+C:\Users\crs\source\GitHub\ResourceTranslator\bin\Debug\net8.0-windows\ResourceTranslator.exe
+C:\Users\crs\source\GitHub\ResourceTranslator\bin\Debug\net8.0-windows\ResourceTranslator.deps.json
+C:\Users\crs\source\GitHub\ResourceTranslator\bin\Debug\net8.0-windows\ResourceTranslator.runtimeconfig.json
+C:\Users\crs\source\GitHub\ResourceTranslator\bin\Debug\net8.0-windows\ResourceTranslator.dll
+C:\Users\crs\source\GitHub\ResourceTranslator\bin\Debug\net8.0-windows\ResourceTranslator.pdb
+C:\Users\crs\source\GitHub\ResourceTranslator\obj\Debug\net8.0-windows\ResourceTranslator.MainForm.resources
+C:\Users\crs\source\GitHub\ResourceTranslator\obj\Debug\net8.0-windows\ResourceTranslator.csproj.GenerateResource.cache
+C:\Users\crs\source\GitHub\ResourceTranslator\obj\Debug\net8.0-windows\ResourceTranslator.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\crs\source\GitHub\ResourceTranslator\obj\Debug\net8.0-windows\ResourceTranslator.AssemblyInfoInputs.cache
+C:\Users\crs\source\GitHub\ResourceTranslator\obj\Debug\net8.0-windows\ResourceTranslator.AssemblyInfo.cs
+C:\Users\crs\source\GitHub\ResourceTranslator\obj\Debug\net8.0-windows\ResourceTranslator.csproj.CoreCompileInputs.cache
+C:\Users\crs\source\GitHub\ResourceTranslator\obj\Debug\net8.0-windows\ResourceTranslator.sourcelink.json
+C:\Users\crs\source\GitHub\ResourceTranslator\obj\Debug\net8.0-windows\ResourceTranslator.dll
+C:\Users\crs\source\GitHub\ResourceTranslator\obj\Debug\net8.0-windows\refint\ResourceTranslator.dll
+C:\Users\crs\source\GitHub\ResourceTranslator\obj\Debug\net8.0-windows\ResourceTranslator.pdb
+C:\Users\crs\source\GitHub\ResourceTranslator\obj\Debug\net8.0-windows\ResourceTranslator.genruntimeconfig.cache
+C:\Users\crs\source\GitHub\ResourceTranslator\obj\Debug\net8.0-windows\ref\ResourceTranslator.dll

@@ -161,7 +161,8 @@ internal sealed class DocumentTranslationService(OpenAiClient client)
             "Markdown or HTML document. Preserve Markdown inline syntax, " +
             "Hugo template markers, HTML fragments and protected placeholders " +
             "exactly. Do not add headings, list markers or punctuation that " +
-            "is not present in the value.";
+            "is not present in the value. Do not translate CSS stylesheets, " +
+            "JavaScript code, or inline code blocks.";
 
         if (!string.IsNullOrWhiteSpace(customInstruction))
         {
@@ -248,6 +249,8 @@ internal sealed class DocumentTranslationService(OpenAiClient client)
         char fenceCharacter = '\0';
         var minimumFenceLength = 0;
         var inHtmlComment = false;
+        var inStyleBlock = false;
+        var inScriptBlock = false;
 
         for (var index = bodyStart; index < lines.Length; index++)
         {
@@ -266,6 +269,38 @@ internal sealed class DocumentTranslationService(OpenAiClient client)
             {
                 if (!line.Text.Contains("-->", StringComparison.Ordinal))
                     inHtmlComment = true;
+
+                continue;
+            }
+
+            if (inStyleBlock)
+            {
+                if (line.Text.Contains("</style>", StringComparison.OrdinalIgnoreCase))
+                    inStyleBlock = false;
+
+                continue;
+            }
+
+            if (line.Text.Contains("<style", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!line.Text.Contains("</style>", StringComparison.OrdinalIgnoreCase))
+                    inStyleBlock = true;
+
+                continue;
+            }
+
+            if (inScriptBlock)
+            {
+                if (line.Text.Contains("</script>", StringComparison.OrdinalIgnoreCase))
+                    inScriptBlock = false;
+
+                continue;
+            }
+
+            if (line.Text.Contains("<script", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!line.Text.Contains("</script>", StringComparison.OrdinalIgnoreCase))
+                    inScriptBlock = true;
 
                 continue;
             }

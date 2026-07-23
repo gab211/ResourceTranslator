@@ -625,46 +625,16 @@ internal sealed class TranslationEngine(OpenAiClient client)
                 prompt,
                 ct);
 
-            var candidates = ExtractTaggedValuesPartial(
-                raw,
-                1,
-                CreateItemTag);
-
-            var candidate = candidates[0];
-
-            if (candidate is null)
-            {
-                return new SingleTranslationResult(
-                    false,
-                    null,
-                    $"The model omitted marker {CreateItemTag(0)} " +
-                    $"during the individual fallback.");
-            }
-
-            if (!TryRestoreProtectedCore(
-                    preparedSegment.Text,
-                    candidate,
+            if (!TryResolveSingleStructuredValue(
+                    preparedSegment,
+                    raw,
                     out var translatedCore,
-                    out var restoreProblem))
+                    out var problem))
             {
                 return new SingleTranslationResult(
                     false,
                     null,
-                    restoreProblem);
-            }
-
-            translatedCore = NormalizeForQuoteContainer(
-                translatedCore,
-                preparedSegment.Segment.QuoteCharacter);
-
-            if (string.IsNullOrWhiteSpace(translatedCore) &&
-                !string.IsNullOrWhiteSpace(
-                    preparedSegment.Text.SourceCore))
-            {
-                return new SingleTranslationResult(
-                    false,
-                    null,
-                    "The individual fallback returned an empty value.");
+                    problem);
             }
 
             if (string.Equals(
@@ -674,11 +644,53 @@ internal sealed class TranslationEngine(OpenAiClient client)
                 !MayRemainUnchanged(
                     preparedSegment.Text.SourceCore))
             {
-                return new SingleTranslationResult(
-                    false,
-                    null,
-                    "The individual fallback returned the original " +
-                    "value unchanged.");
+                var relaxedPrompt = BuildStructuredPrompt(
+                    chunk,
+                    new[] { preparedSegment },
+                    fileName,
+                    targetLanguage,
+                    customInstruction,
+                    "The previous attempt returned the source text " +
+                    "unchanged. Translate it more freely into the target " +
+                    "language and paraphrase naturally if needed. " +
+                    "Preserve every protected marker exactly. Do not keep " +
+                    "the source wording unless it is a proper noun, brand " +
+                    "name, code identifier, acronym, or another term that " +
+                    "should stay unchanged.");
+
+                raw = await client.TranslateAsync(
+                    provider,
+                    baseUrl,
+                    apiKey,
+                    model,
+                    relaxedPrompt,
+                    ct);
+
+                if (!TryResolveSingleStructuredValue(
+                        preparedSegment,
+                        raw,
+                        out translatedCore,
+                        out problem))
+                {
+                    return new SingleTranslationResult(
+                        false,
+                        null,
+                        problem);
+                }
+
+                if (string.Equals(
+                        translatedCore,
+                        preparedSegment.Text.SourceCore,
+                        StringComparison.Ordinal) &&
+                    !MayRemainUnchanged(
+                        preparedSegment.Text.SourceCore))
+                {
+                    return new SingleTranslationResult(
+                        false,
+                        null,
+                        "The individual fallback returned the original " +
+                        "value unchanged even after a relaxed retry.");
+                }
             }
 
             var value =
@@ -702,6 +714,53 @@ internal sealed class TranslationEngine(OpenAiClient client)
                 null,
                 $"The individual fallback failed: {ex.Message}");
         }
+    }
+
+    private static bool TryResolveSingleStructuredValue(
+        PreparedSegment preparedSegment,
+        string raw,
+        out string translatedCore,
+        out string problem)
+    {
+        var candidates = ExtractTaggedValuesPartial(
+            raw,
+            1,
+            CreateItemTag);
+
+        var candidate = candidates[0];
+
+        if (candidate is null)
+        {
+            translatedCore = string.Empty;
+            problem =
+                $"The model omitted marker {CreateItemTag(0)} " +
+                $"during the individual fallback.";
+            return false;
+        }
+
+        if (!TryRestoreProtectedCore(
+                preparedSegment.Text,
+                candidate,
+                out translatedCore,
+                out problem))
+        {
+            return false;
+        }
+
+        translatedCore = NormalizeForQuoteContainer(
+            translatedCore,
+            preparedSegment.Segment.QuoteCharacter);
+
+        if (string.IsNullOrWhiteSpace(translatedCore) &&
+            !string.IsNullOrWhiteSpace(preparedSegment.Text.SourceCore))
+        {
+            problem = "The individual fallback returned an empty value.";
+            translatedCore = string.Empty;
+            return false;
+        }
+
+        problem = string.Empty;
+        return true;
     }
 
     private async Task<ChunkTranslationResult> TranslateWholeLineChunk(
