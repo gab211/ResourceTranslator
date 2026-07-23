@@ -70,6 +70,18 @@ internal sealed class DocumentTranslationService(OpenAiClient client)
         RegexOptions.Compiled |
         RegexOptions.CultureInvariant);
 
+    private static readonly Regex MarkdownHtmlBlockStartRegex = new(
+        @"^\s*<(?<name>div|section|article|header|footer|main|aside|nav|form|figure|figcaption|table|thead|tbody|tfoot|tr|ul|ol|blockquote|details|summary)\b",
+        RegexOptions.Compiled |
+        RegexOptions.IgnoreCase |
+        RegexOptions.CultureInvariant);
+
+    private static readonly Regex MarkdownHtmlTagRegex = new(
+        @"<\s*(?<closing>/)?\s*(?<name>[A-Za-z0-9:-]+)\b[^>]*?(?<selfclosing>/)?\s*>",
+        RegexOptions.Compiled |
+        RegexOptions.IgnoreCase |
+        RegexOptions.CultureInvariant);
+
     private static readonly Regex MarkdownProtectedInlineRegex = new(
         @"\{\{[^{}\r\n]*\}\}" +
         @"|`+[^`\r\n]*`+" +
@@ -164,6 +176,16 @@ internal sealed class DocumentTranslationService(OpenAiClient client)
             "is not present in the value. Do not translate CSS stylesheets, " +
             "JavaScript code, or inline code blocks.";
 
+        if (segments.Any(segment => segment.OriginalText.Length < 80))
+        {
+            documentInstruction +=
+                Environment.NewLine +
+                "For very short UI strings such as headlines, buttons, " +
+                "labels, and calls to action, translate naturally in the " +
+                "context of the surrounding HTML section instead of using " +
+                "overly literal wording.";
+        }
+
         if (!string.IsNullOrWhiteSpace(customInstruction))
         {
             documentInstruction +=
@@ -251,6 +273,9 @@ internal sealed class DocumentTranslationService(OpenAiClient client)
         var inHtmlComment = false;
         var inStyleBlock = false;
         var inScriptBlock = false;
+        var inHtmlBlock = false;
+        var htmlBlockStartIndex = -1;
+        var htmlBlockTagStack = new Stack<string>();
 
         for (var index = bodyStart; index < lines.Length; index++)
         {
@@ -305,6 +330,55 @@ internal sealed class DocumentTranslationService(OpenAiClient client)
                 continue;
             }
 
+            if (inHtmlBlock)
+            {
+                UpdateMarkdownHtmlBlockState(
+                    line.Text,
+                    htmlBlockTagStack);
+
+                if (htmlBlockTagStack.Count > 0)
+                    continue;
+
+                AddMarkdownHtmlBlockSegment(
+                    result,
+                    lines,
+                    htmlBlockStartIndex,
+                    index,
+                    source);
+
+                inHtmlBlock = false;
+                htmlBlockStartIndex = -1;
+                continue;
+            }
+
+            if (TryGetMarkdownHtmlBlockStartTag(
+                    line.Text,
+                    out _))
+            {
+                inHtmlBlock = true;
+                htmlBlockStartIndex = index;
+                htmlBlockTagStack.Clear();
+
+                UpdateMarkdownHtmlBlockState(
+                    line.Text,
+                    htmlBlockTagStack);
+
+                if (htmlBlockTagStack.Count == 0)
+                {
+                    AddMarkdownHtmlBlockSegment(
+                        result,
+                        lines,
+                        htmlBlockStartIndex,
+                        index,
+                        source);
+
+                    inHtmlBlock = false;
+                    htmlBlockStartIndex = -1;
+                }
+
+                continue;
+            }
+
             var fenceMatch = MarkdownFenceRegex.Match(line.Text);
 
             if (fenceMatch.Success)
@@ -344,6 +418,16 @@ internal sealed class DocumentTranslationService(OpenAiClient client)
             }
 
             AddMarkdownBodySegment(result, line);
+        }
+
+        if (inHtmlBlock && htmlBlockStartIndex >= 0)
+        {
+            AddMarkdownHtmlBlockSegment(
+                result,
+                lines,
+                htmlBlockStartIndex,
+                lines.Length - 1,
+                source);
         }
 
         return RemoveOverlappingSegments(result);
@@ -1049,6 +1133,123 @@ internal sealed class DocumentTranslationService(OpenAiClient client)
         }
 
         return pipeCount >= 2;
+    }
+
+    private static void AddMarkdownHtmlBlockSegment(
+        ICollection<DocumentSegment> result,
+        IReadOnlyList<SourceLine> lines,
+        int startLineIndex,
+        int endLineIndex,
+        string source)
+    {
+        if (startLineIndex < 0 ||
+            endLineIndex < startLineIndex ||
+            startLineIndex >= lines.Count)
+        {
+            return;
+        }
+
+        var start = lines[startLineIndex].Start;
+        var end = endLineIndex + 1 < lines.Count
+            ? lines[endLineIndex + 1].Start
+            : source.Length;
+
+        var length = end - start;
+
+        if (length <= 0)
+            return;
+
+        var value = source.Substring(start, length);
+
+        if (!LooksTranslatable(value))
+            return;
+
+        result.Add(
+            new DocumentSegment(
+                result.Count,
+                start,
+                length,
+                lines[startLineIndex].Number,
+                value,
+                value,
+                Array.Empty<DocumentToken>()));
+    }
+
+    private static bool TryGetMarkdownHtmlBlockStartTag(
+        string line,
+        out string tagName)
+    {
+        var match = MarkdownHtmlBlockStartRegex.Match(line);
+
+        if (!match.Success)
+        {
+            tagName = string.Empty;
+            return false;
+        }
+
+        tagName = match.Groups["name"].Value;
+        return true;
+    }
+
+    private static void UpdateMarkdownHtmlBlockState(
+        string line,
+        Stack<string> tagStack)
+    {
+        foreach (Match match in MarkdownHtmlTagRegex.Matches(line))
+        {
+            var name = match.Groups["name"].Value;
+
+            if (!IsMarkdownHtmlBlockTag(name))
+                continue;
+
+            var isClosing = match.Groups["closing"].Success;
+            var isSelfClosing = match.Groups["selfclosing"].Success ||
+                                match.Value.TrimEnd().EndsWith(
+                                    "/>",
+                                    StringComparison.Ordinal);
+
+            if (isClosing)
+            {
+                if (tagStack.Count > 0 &&
+                    string.Equals(
+                        tagStack.Peek(),
+                        name,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    tagStack.Pop();
+                }
+
+                continue;
+            }
+
+            if (!isSelfClosing)
+                tagStack.Push(name);
+        }
+    }
+
+    private static bool IsMarkdownHtmlBlockTag(string tagName)
+    {
+        return tagName.Equals("div", StringComparison.OrdinalIgnoreCase) ||
+               tagName.Equals("section", StringComparison.OrdinalIgnoreCase) ||
+               tagName.Equals("article", StringComparison.OrdinalIgnoreCase) ||
+               tagName.Equals("header", StringComparison.OrdinalIgnoreCase) ||
+               tagName.Equals("footer", StringComparison.OrdinalIgnoreCase) ||
+               tagName.Equals("main", StringComparison.OrdinalIgnoreCase) ||
+               tagName.Equals("aside", StringComparison.OrdinalIgnoreCase) ||
+               tagName.Equals("nav", StringComparison.OrdinalIgnoreCase) ||
+               tagName.Equals("form", StringComparison.OrdinalIgnoreCase) ||
+               tagName.Equals("figure", StringComparison.OrdinalIgnoreCase) ||
+               tagName.Equals("figcaption", StringComparison.OrdinalIgnoreCase) ||
+               tagName.Equals("table", StringComparison.OrdinalIgnoreCase) ||
+               tagName.Equals("thead", StringComparison.OrdinalIgnoreCase) ||
+               tagName.Equals("tbody", StringComparison.OrdinalIgnoreCase) ||
+               tagName.Equals("tfoot", StringComparison.OrdinalIgnoreCase) ||
+               tagName.Equals("tr", StringComparison.OrdinalIgnoreCase) ||
+               tagName.Equals("ul", StringComparison.OrdinalIgnoreCase) ||
+               tagName.Equals("ol", StringComparison.OrdinalIgnoreCase) ||
+               tagName.Equals("blockquote", StringComparison.OrdinalIgnoreCase) ||
+               tagName.Equals("details", StringComparison.OrdinalIgnoreCase) ||
+               tagName.Equals("summary", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool LooksTranslatable(string value)
