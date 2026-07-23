@@ -437,111 +437,12 @@ internal sealed class DocumentTranslationService(OpenAiClient client)
         string source)
     {
         var result = new List<DocumentSegment>();
-        var skipTagStack = new Stack<string>();
-        var index = 0;
-        var lineNumber = 1;
-
-        while (index < source.Length)
-        {
-            if (source[index] != '<')
-            {
-                var textStart = index;
-                var textLine = lineNumber;
-
-                while (index < source.Length && source[index] != '<')
-                {
-                    if (source[index] == '\n')
-                        lineNumber++;
-
-                    index++;
-                }
-
-                if (skipTagStack.Count == 0)
-                {
-                    AddTrimmedSegment(
-                        result,
-                        source,
-                        textStart,
-                        index - textStart,
-                        textLine);
-                }
-
-                continue;
-            }
-
-            if (source.IndexOf("<!--", index, StringComparison.Ordinal) == index)
-            {
-                var commentEnd = source.IndexOf(
-                    "-->",
-                    index + 4,
-                    StringComparison.Ordinal);
-
-                if (commentEnd < 0)
-                    break;
-
-                lineNumber += CountNewLines(
-                    source,
-                    index,
-                    commentEnd + 3 - index);
-
-                index = commentEnd + 3;
-                continue;
-            }
-
-            var tagEnd = FindHtmlTagEnd(source, index);
-
-            if (tagEnd < 0)
-                break;
-
-            var tagLength = tagEnd - index + 1;
-            var tagText = source.Substring(index, tagLength);
-            var tagMatch = HtmlTagNameRegex.Match(tagText);
-
-            if (tagMatch.Success)
-            {
-                var tagName = tagMatch.Groups["name"].Value;
-                var isClosing = tagMatch.Groups["closing"].Success;
-                var isSelfClosing = tagText.TrimEnd().EndsWith(
-                    "/>",
-                    StringComparison.Ordinal);
-
-                if (IsSkippedHtmlElement(tagName))
-                {
-                    if (isClosing)
-                    {
-                        if (skipTagStack.Count > 0 &&
-                            string.Equals(
-                                skipTagStack.Peek(),
-                                tagName,
-                                StringComparison.OrdinalIgnoreCase))
-                        {
-                            skipTagStack.Pop();
-                        }
-                    }
-                    else if (!isSelfClosing)
-                    {
-                        skipTagStack.Push(tagName);
-                    }
-                }
-
-                if (skipTagStack.Count == 0 && !isClosing)
-                {
-                    AddHtmlAttributeSegments(
-                        result,
-                        source,
-                        index,
-                        tagText,
-                        lineNumber);
-                }
-            }
-
-            lineNumber += CountNewLines(
-                source,
-                index,
-                tagLength);
-
-            index = tagEnd + 1;
-        }
+        AddHtmlSegments(
+            result,
+            source,
+            0,
+            source.Length,
+            1);
 
         return RemoveOverlappingSegments(result);
     }
@@ -1154,25 +1055,135 @@ internal sealed class DocumentTranslationService(OpenAiClient client)
             ? lines[endLineIndex + 1].Start
             : source.Length;
 
-        var length = end - start;
-
-        if (length <= 0)
+        if (end <= start)
             return;
 
-        var value = source.Substring(start, length);
+        AddHtmlSegments(
+            result,
+            source,
+            start,
+            end,
+            lines[startLineIndex].Number);
+    }
 
-        if (!LooksTranslatable(value))
-            return;
+    private static void AddHtmlSegments(
+        ICollection<DocumentSegment> result,
+        string source,
+        int start,
+        int end,
+        int lineNumber)
+    {
+        var skipTagStack = new Stack<string>();
+        var index = start;
 
-        result.Add(
-            new DocumentSegment(
-                result.Count,
-                start,
-                length,
-                lines[startLineIndex].Number,
-                value,
-                value,
-                Array.Empty<DocumentToken>()));
+        while (index < end)
+        {
+            if (source[index] != '<')
+            {
+                var textStart = index;
+                var textLine = lineNumber;
+
+                while (index < end && source[index] != '<')
+                {
+                    if (source[index] == '\n')
+                        lineNumber++;
+
+                    index++;
+                }
+
+                if (skipTagStack.Count == 0)
+                {
+                    AddTrimmedSegment(
+                        result,
+                        source,
+                        textStart,
+                        index - textStart,
+                        textLine);
+                }
+
+                continue;
+            }
+
+            if (source.IndexOf("<!--", index, StringComparison.Ordinal) == index)
+            {
+                var commentEnd = source.IndexOf(
+                    "-->",
+                    index + 4,
+                    StringComparison.Ordinal);
+
+                if (commentEnd < 0 || commentEnd >= end)
+                {
+                    lineNumber += CountNewLines(
+                        source,
+                        index,
+                        end - index);
+
+                    break;
+                }
+
+                lineNumber += CountNewLines(
+                    source,
+                    index,
+                    commentEnd + 3 - index);
+
+                index = commentEnd + 3;
+                continue;
+            }
+
+            var tagEnd = FindHtmlTagEnd(source, index);
+
+            if (tagEnd < 0 || tagEnd >= end)
+                break;
+
+            var tagLength = tagEnd - index + 1;
+            var tagText = source.Substring(index, tagLength);
+            var tagMatch = HtmlTagNameRegex.Match(tagText);
+
+            if (tagMatch.Success)
+            {
+                var tagName = tagMatch.Groups["name"].Value;
+                var isClosing = tagMatch.Groups["closing"].Success;
+                var isSelfClosing = tagText.TrimEnd().EndsWith(
+                    "/>",
+                    StringComparison.Ordinal);
+
+                if (IsSkippedHtmlElement(tagName))
+                {
+                    if (isClosing)
+                    {
+                        if (skipTagStack.Count > 0 &&
+                            string.Equals(
+                                skipTagStack.Peek(),
+                                tagName,
+                                StringComparison.OrdinalIgnoreCase))
+                        {
+                            skipTagStack.Pop();
+                        }
+                    }
+                    else if (!isSelfClosing)
+                    {
+                        skipTagStack.Push(tagName);
+                    }
+                }
+
+                if (skipTagStack.Count == 0 && !isClosing)
+                {
+                    AddHtmlAttributeSegments(
+                        result,
+                        source,
+                        index,
+                        tagText,
+                        lineNumber);
+                }
+            }
+
+            lineNumber += CountNewLines(
+                source,
+                index,
+                tagLength);
+
+            index = tagEnd + 1;
+        }
     }
 
     private static bool TryGetMarkdownHtmlBlockStartTag(

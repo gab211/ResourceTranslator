@@ -323,13 +323,18 @@ internal sealed partial class MainForm : Form
                     Log(item.Message);
                 });
 
-            var engine =
-                new TranslationEngine(_client);
+            string translated;
+            TranslationRunReport? translationReport;
 
-            var translated =
-                await engine.TranslateAsync(
+            if (DocumentTranslationService.Supports(_inputFile.Text))
+            {
+                var documentService =
+                    new DocumentTranslationService(_client);
+
+                var outcome = await documentService.TranslateAsync(
                     file.Text,
                     Path.GetFileName(_inputFile.Text),
+                    saveDialog.FileName,
                     _language.Text.Trim(),
                     _customInstruction.Text.Trim(),
                     (int)_chunkSize.Value,
@@ -339,8 +344,34 @@ internal sealed partial class MainForm : Form
                     _apiKey.Text.Trim(),
                     _model.Text.Trim(),
                     progress,
-                    _cts.Token,
-                    saveDialog.FileName);
+                    _cts.Token);
+
+                translated = outcome.Text;
+                translationReport = outcome.Report;
+            }
+            else
+            {
+                var engine =
+                    new TranslationEngine(_client);
+
+                translated =
+                    await engine.TranslateAsync(
+                        file.Text,
+                        Path.GetFileName(_inputFile.Text),
+                        _language.Text.Trim(),
+                        _customInstruction.Text.Trim(),
+                        (int)_chunkSize.Value,
+                        (int)_contextLines.Value,
+                        SelectedProvider,
+                        _baseUrl.Text.Trim(),
+                        _apiKey.Text.Trim(),
+                        _model.Text.Trim(),
+                        progress,
+                        _cts.Token,
+                        saveDialog.FileName);
+
+                translationReport = engine.LastRunReport;
+            }
 
             file.Write(
                 saveDialog.FileName,
@@ -351,7 +382,7 @@ internal sealed partial class MainForm : Form
             Log($"Saved: {saveDialog.FileName}");
 
             ShowSingleFileCompletion(
-                engine.LastRunReport,
+                translationReport,
                 saveDialog.FileName);
         }
         catch (OperationCanceledException)
