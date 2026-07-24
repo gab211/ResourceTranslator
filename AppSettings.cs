@@ -4,6 +4,7 @@ namespace ResourceTranslator;
 
 internal sealed class AppSettings
 {
+    public string TranslationMode { get; set; } = "SingleFile";
     public ApiProvider Provider { get; set; } = ApiProvider.OpenAI;
     public string ApiBaseUrl { get; set; } = "https://api.openai.com/v1";
     public string Model { get; set; } = "gpt-5-mini";

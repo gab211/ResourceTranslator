@@ -5,6 +5,12 @@ using System.Text.RegularExpressions;
 
 namespace ResourceTranslator;
 
+internal enum DocumentContentType
+{
+    Markdown,
+    Html
+}
+
 internal sealed record DocumentTranslationOutcome(
     string Text,
     TranslationRunReport? Report,
@@ -135,13 +141,15 @@ internal sealed class DocumentTranslationService(OpenAiClient client)
         string apiKey,
         string model,
         IProgress<TranslationProgress> progress,
-        CancellationToken ct)
+        CancellationToken ct,
+        DocumentContentType? contentType = null,
+        IProgress<string>? partialDocumentProgress = null)
     {
-        var extension = Path
-            .GetExtension(fileName)
-            .ToLowerInvariant();
+        var resolvedContentType = ResolveContentType(
+            fileName,
+            contentType);
 
-        var rawSegments = extension is ".md" or ".markdown"
+        var rawSegments = resolvedContentType == DocumentContentType.Markdown
             ? ExtractMarkdownSegments(source)
             : ExtractHtmlSegments(source);
 
@@ -206,7 +214,21 @@ internal sealed class DocumentTranslationService(OpenAiClient client)
             model,
             progress,
             ct,
-            outputFilePath);
+            outputFilePath,
+            partialDocumentProgress is null
+                ? null
+                : new Progress<string>(translatedPartialResource =>
+                {
+                    var partialValues = ParseTranslatedResourcePartial(
+                        translatedPartialResource,
+                        segments);
+
+                    partialDocumentProgress.Report(
+                        ReconstructDocument(
+                            source,
+                            segments,
+                            partialValues));
+                }));
 
         var translatedValues = ParseTranslatedResource(
             translatedResource,
@@ -805,6 +827,51 @@ internal sealed class DocumentTranslationService(OpenAiClient client)
         return result;
     }
 
+    private static IReadOnlyDictionary<int, string> ParseTranslatedResourcePartial(
+        string translatedResource,
+        IReadOnlyList<DocumentSegment> segments)
+    {
+        var completedLines = translatedResource
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace('\r', '\n')
+            .Split('\n')
+            .Select(line => line.Trim())
+            .Where(line =>
+                line.Length > 0 &&
+                line != "{" &&
+                line != "}")
+            .Select(line => line.TrimEnd(','))
+            .Where(line =>
+                line.StartsWith('"') &&
+                line.Contains(':', StringComparison.Ordinal))
+            .ToArray();
+
+        if (completedLines.Length == 0)
+        {
+            return segments.ToDictionary(
+                segment => segment.Index,
+                segment => segment.OriginalText);
+        }
+
+        try
+        {
+            var partialJson =
+                "{" +
+                string.Join(",", completedLines) +
+                "}";
+
+            return ParseTranslatedResource(
+                partialJson,
+                segments);
+        }
+        catch
+        {
+            return segments.ToDictionary(
+                segment => segment.Index,
+                segment => segment.OriginalText);
+        }
+    }
+
     private static bool TryRestoreDocumentTokens(
         DocumentSegment segment,
         string translatedValue,
@@ -1367,5 +1434,21 @@ internal sealed class DocumentTranslationService(OpenAiClient client)
     private static string CreateSegmentKey(int index)
     {
         return $"__rt_segment_{index + 1:D6}";
+    }
+
+    private static DocumentContentType ResolveContentType(
+        string fileName,
+        DocumentContentType? contentType)
+    {
+        if (contentType.HasValue)
+            return contentType.Value;
+
+        var extension = Path
+            .GetExtension(fileName)
+            .ToLowerInvariant();
+
+        return extension is ".md" or ".markdown"
+            ? DocumentContentType.Markdown
+            : DocumentContentType.Html;
     }
 }

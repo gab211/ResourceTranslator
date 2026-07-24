@@ -130,7 +130,8 @@ internal sealed class TranslationEngine(OpenAiClient client)
         string model,
         IProgress<TranslationProgress> progress,
         CancellationToken ct,
-        string? outputFilePath = null)
+        string? outputFilePath = null,
+        IProgress<string>? partialResultProgress = null)
     {
         var startedAt = DateTimeOffset.Now;
 
@@ -206,6 +207,8 @@ internal sealed class TranslationEngine(OpenAiClient client)
                 output.Append('\n');
 
             output.Append(result.Text);
+
+            partialResultProgress?.Report(output.ToString());
 
             foreach (var issue in result.Issues)
             {

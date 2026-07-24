@@ -2,6 +2,13 @@ namespace ResourceTranslator;
 
 internal sealed partial class MainForm : Form
 {
+    private enum TranslationMode
+    {
+        SingleFile,
+        FolderBatch,
+        Editor
+    }
+
     private readonly AppSettings _settings;
     private readonly OpenAiClient _client = new();
     private CancellationTokenSource? _cts;
@@ -17,8 +24,12 @@ internal sealed partial class MainForm : Form
         UpdateModeUi();
     }
 
-    private bool IsFolderBatchMode =>
-        _translationModeTabs.SelectedTab == _folderBatchTab;
+    private TranslationMode CurrentTranslationMode =>
+        _translationModeTabs.SelectedTab == _folderBatchTab
+            ? TranslationMode.FolderBatch
+            : _translationModeTabs.SelectedTab == _editorTranslationTab
+                ? TranslationMode.Editor
+                : TranslationMode.SingleFile;
 
     private void WireEvents()
     {
@@ -112,10 +123,9 @@ internal sealed partial class MainForm : Form
         _overwriteExisting.Checked =
             _settings.OverwriteExistingFiles;
 
-        _translationModeTabs.SelectedTab =
-            _settings.UseFolderBatch
-                ? _folderBatchTab
-                : _singleFileTab;
+        _editorContentType.SelectedIndex = 0;
+
+        SelectTranslationMode(LoadTranslationMode());
     }
 
     private void SaveSettings()
@@ -128,7 +138,12 @@ internal sealed partial class MainForm : Form
         _settings.ContextLines = (int)_contextLines.Value;
         _settings.CustomInstruction = _customInstruction.Text;
 
-        _settings.UseFolderBatch = IsFolderBatchMode;
+        _settings.TranslationMode =
+            CurrentTranslationMode.ToString();
+
+        _settings.UseFolderBatch =
+            CurrentTranslationMode == TranslationMode.FolderBatch;
+
         _settings.LastInputFile = _inputFile.Text;
         _settings.LastSourceFolder = _sourceFolder.Text;
         _settings.LastTargetFolder = _targetFolder.Text;
@@ -192,6 +207,124 @@ internal sealed partial class MainForm : Form
         }
     }
 
+    private async Task StartEditorTranslationAsync()
+    {
+        try
+        {
+            ValidateCommonApiFields();
+            ValidateEditorFields();
+
+            SaveSettings();
+
+            _cts = new CancellationTokenSource();
+
+            SetBusy(
+                true,
+                "Preparing in-editor translation...");
+
+            _log.Clear();
+            _editorTranslation.Clear();
+            _progress.Value = 0;
+            _progress.Maximum = 1;
+
+            var sourceText = _editorSource.Text;
+            var contentTypeLabel = _editorContentType.SelectedItem?.ToString() ??
+                                   "Plain text";
+
+            Log($"Editor content type: {contentTypeLabel}");
+
+            var progress =
+                new Progress<TranslationProgress>(item =>
+                {
+                    _progress.Maximum =
+                        Math.Max(1, item.Total);
+
+                    _progress.Value =
+                        Math.Min(
+                            item.Completed,
+                            _progress.Maximum);
+
+                    _status.Text = item.Message;
+                    Log(item.Message);
+                });
+
+            var partialResultProgress =
+                new Progress<string>(translatedText =>
+                {
+                    _editorTranslation.Text = translatedText;
+                });
+
+            TranslationRunReport? translationReport;
+
+            if (TryGetEditorDocumentContentType(
+                    out var documentContentType))
+            {
+                var documentService =
+                    new DocumentTranslationService(_client);
+
+                var outcome = await documentService.TranslateAsync(
+                    sourceText,
+                    documentContentType == DocumentContentType.Markdown
+                        ? "EditorContent.md"
+                        : "EditorContent.html",
+                    string.Empty,
+                    _language.Text.Trim(),
+                    _customInstruction.Text.Trim(),
+                    (int)_chunkSize.Value,
+                    (int)_contextLines.Value,
+                    SelectedProvider,
+                    _baseUrl.Text.Trim(),
+                    _apiKey.Text.Trim(),
+                    _model.Text.Trim(),
+                    progress,
+                    _cts.Token,
+                    documentContentType,
+                    partialResultProgress);
+
+                _editorTranslation.Text = outcome.Text;
+                translationReport = outcome.Report;
+            }
+            else
+            {
+                var engine = new TranslationEngine(_client);
+
+                var translatedText = await engine.TranslateAsync(
+                    sourceText,
+                    "EditorContent.txt",
+                    _language.Text.Trim(),
+                    _customInstruction.Text.Trim(),
+                    (int)_chunkSize.Value,
+                    (int)_contextLines.Value,
+                    SelectedProvider,
+                    _baseUrl.Text.Trim(),
+                    _apiKey.Text.Trim(),
+                    _model.Text.Trim(),
+                    progress,
+                    _cts.Token,
+                    partialResultProgress: partialResultProgress);
+
+                _editorTranslation.Text = translatedText;
+                translationReport = engine.LastRunReport;
+            }
+
+            _progress.Value = _progress.Maximum;
+
+            ShowEditorCompletion(translationReport);
+        }
+        catch (OperationCanceledException)
+        {
+            Log("In-editor translation cancelled.");
+        }
+        catch (Exception ex)
+        {
+            ShowError(ex);
+        }
+        finally
+        {
+            FinishOperation();
+        }
+    }
+
     private void SelectTargetFolder()
     {
         using var dialog = new FolderBrowserDialog
@@ -249,12 +382,41 @@ internal sealed partial class MainForm : Form
         }
     }
 
+    private bool TryGetEditorDocumentContentType(
+        out DocumentContentType contentType)
+    {
+        switch (_editorContentType.SelectedItem?.ToString())
+        {
+            case "Markdown":
+                contentType = DocumentContentType.Markdown;
+                return true;
+
+            case "HTML":
+                contentType = DocumentContentType.Html;
+                return true;
+
+            default:
+                contentType = default;
+                return false;
+        }
+    }
+
     private async Task StartTranslationAsync()
     {
-        if (IsFolderBatchMode)
-            await StartFolderBatchAsync();
-        else
-            await StartSingleFileTranslationAsync();
+        switch (CurrentTranslationMode)
+        {
+            case TranslationMode.FolderBatch:
+                await StartFolderBatchAsync();
+                break;
+
+            case TranslationMode.Editor:
+                await StartEditorTranslationAsync();
+                break;
+
+            default:
+                await StartSingleFileTranslationAsync();
+                break;
+        }
     }
 
     private async Task StartSingleFileTranslationAsync()
@@ -399,6 +561,15 @@ internal sealed partial class MainForm : Form
         }
     }
 
+    private void ValidateEditorFields()
+    {
+        if (string.IsNullOrWhiteSpace(_editorSource.Text))
+        {
+            throw new InvalidOperationException(
+                "Enter source text for in-editor translation.");
+        }
+    }
+
     private async Task StartFolderBatchAsync()
     {
         try
@@ -533,6 +704,48 @@ internal sealed partial class MainForm : Form
             Environment.NewLine +
             Environment.NewLine +
             outputPath,
+            "Completed",
+            MessageBoxButtons.OK,
+            MessageBoxIcon.Information);
+    }
+
+    private void ShowEditorCompletion(
+        TranslationRunReport? report)
+    {
+        if (report is not null &&
+            report.RetainedOriginalCount > 0)
+        {
+            var message =
+                "In-editor translation completed, but " +
+                $"{report.RetainedOriginalCount} value(s) or line(s) " +
+                "were retained in the original language.";
+
+            if (!string.IsNullOrWhiteSpace(report.LogFilePath))
+            {
+                message +=
+                    Environment.NewLine +
+                    Environment.NewLine +
+                    "Diagnostic log:" +
+                    Environment.NewLine +
+                    report.LogFilePath;
+
+                Log(
+                    $"Diagnostic log: {report.LogFilePath}");
+            }
+
+            MessageBox.Show(
+                this,
+                message,
+                "Completed with warnings",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+
+            return;
+        }
+
+        MessageBox.Show(
+            this,
+            "In-editor translation completed successfully.",
             "Completed",
             MessageBoxButtons.OK,
             MessageBoxIcon.Information);
@@ -690,23 +903,58 @@ internal sealed partial class MainForm : Form
 
     private void UpdateModeUi()
     {
-        if (IsFolderBatchMode)
+        switch (CurrentTranslationMode)
         {
-            _translate.Text = "Start folder batch";
-            _infoLabel.Text =
-                "Folder batch preserves the relative folder structure. " +
-                "Only the selected extensions are translated. Other files " +
-                "can optionally be copied unchanged. Existing target files " +
-                "can be skipped so interrupted runs can be continued.";
+            case TranslationMode.FolderBatch:
+                _translate.Text = "Start folder batch";
+                _infoLabel.Text =
+                    "Folder batch preserves the relative folder structure. " +
+                    "Only the selected extensions are translated. Other files " +
+                    "can optionally be copied unchanged. Existing target files " +
+                    "can be skipped so interrupted runs can be continued.";
+                break;
+
+            case TranslationMode.Editor:
+                _translate.Text = "Translate in editor";
+                _infoLabel.Text =
+                    "In-editor translation processes pasted text in chunks and " +
+                    "builds the translated result directly in the output editor. " +
+                    "Use the content type to enable Markdown or HTML handling.";
+                break;
+
+            default:
+                _translate.Text = "Translate and save";
+                _infoLabel.Text =
+                    "Single-file translation supports OpenAI and a local " +
+                    "LM Studio server. Keys, syntax, placeholders, indentation, " +
+                    "encoding and line endings are preserved and validated.";
+                break;
         }
-        else
+    }
+
+    private TranslationMode LoadTranslationMode()
+    {
+        if (Enum.TryParse<TranslationMode>(
+                _settings.TranslationMode,
+                ignoreCase: true,
+                out var mode))
         {
-            _translate.Text = "Translate and save";
-            _infoLabel.Text =
-                "Single-file translation supports OpenAI and a local " +
-                "LM Studio server. Keys, syntax, placeholders, indentation, " +
-                "encoding and line endings are preserved and validated.";
+            return mode;
         }
+
+        return _settings.UseFolderBatch
+            ? TranslationMode.FolderBatch
+            : TranslationMode.SingleFile;
+    }
+
+    private void SelectTranslationMode(TranslationMode mode)
+    {
+        _translationModeTabs.SelectedTab = mode switch
+        {
+            TranslationMode.FolderBatch => _folderBatchTab,
+            TranslationMode.Editor => _editorTranslationTab,
+            _ => _singleFileTab
+        };
     }
 
     private void SetBusy(

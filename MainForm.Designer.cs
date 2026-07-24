@@ -57,6 +57,15 @@ internal sealed partial class MainForm
     private CheckBox _copyOtherFiles = null!;
     private CheckBox _overwriteExisting = null!;
 
+    private TabPage _editorTranslationTab = null!;
+    private TableLayoutPanel _editorTranslationLayout = null!;
+    private Label _editorContentTypeLabel = null!;
+    private ComboBox _editorContentType = null!;
+    private Label _editorSourceLabel = null!;
+    private TextBox _editorSource = null!;
+    private Label _editorTranslationLabel = null!;
+    private TextBox _editorTranslation = null!;
+
     private TextBox _log = null!;
     private Label _status = null!;
     private ProgressBar _progress = null!;
@@ -117,6 +126,14 @@ internal sealed partial class MainForm
         _includeSubfolders = new CheckBox();
         _copyOtherFiles = new CheckBox();
         _overwriteExisting = new CheckBox();
+        _editorTranslationTab = new TabPage();
+        _editorTranslationLayout = new TableLayoutPanel();
+        _editorContentTypeLabel = new Label();
+        _editorContentType = new ComboBox();
+        _editorSourceLabel = new Label();
+        _editorSource = new TextBox();
+        _editorTranslationLabel = new Label();
+        _editorTranslation = new TextBox();
         _infoLabel = new Label();
         _log = new TextBox();
         _bottomLayout = new TableLayoutPanel();
@@ -135,6 +152,8 @@ internal sealed partial class MainForm
         _folderBatchTab.SuspendLayout();
         _folderBatchLayout.SuspendLayout();
         _batchOptionsPanel.SuspendLayout();
+        _editorTranslationTab.SuspendLayout();
+        _editorTranslationLayout.SuspendLayout();
         _bottomLayout.SuspendLayout();
         SuspendLayout();
         // 
@@ -173,7 +192,7 @@ internal sealed partial class MainForm
         _topLayout.RowStyles.Add(new RowStyle());
         _topLayout.RowStyles.Add(new RowStyle());
         _topLayout.RowStyles.Add(new RowStyle());
-        _topLayout.Size = new Size(960, 548);
+        _topLayout.Size = new Size(960, 643);
         _topLayout.TabIndex = 0;
         // 
         // _formLayout
@@ -215,7 +234,7 @@ internal sealed partial class MainForm
         _formLayout.RowStyles.Add(new RowStyle());
         _formLayout.RowStyles.Add(new RowStyle());
         _formLayout.RowStyles.Add(new RowStyle());
-        _formLayout.Size = new Size(960, 311);
+        _formLayout.Size = new Size(960, 250);
         _formLayout.TabIndex = 0;
         // 
         // _providerLabel
@@ -400,7 +419,7 @@ internal sealed partial class MainForm
         // 
         _customInstructionLabel.Anchor = AnchorStyles.Left;
         _customInstructionLabel.AutoSize = true;
-        _customInstructionLabel.Location = new Point(3, 259);
+        _customInstructionLabel.Location = new Point(3, 228);
         _customInstructionLabel.Margin = new Padding(3, 8, 3, 3);
         _customInstructionLabel.Name = "_customInstructionLabel";
         _customInstructionLabel.Size = new Size(93, 15);
@@ -416,19 +435,20 @@ internal sealed partial class MainForm
         _customInstruction.Multiline = true;
         _customInstruction.Name = "_customInstruction";
         _customInstruction.ScrollBars = ScrollBars.Vertical;
-        _customInstruction.Size = new Size(804, 86);
+        _customInstruction.Size = new Size(804, 25);
         _customInstruction.TabIndex = 9;
         // 
         // _translationModeTabs
         // 
         _translationModeTabs.Controls.Add(_singleFileTab);
         _translationModeTabs.Controls.Add(_folderBatchTab);
+        _translationModeTabs.Controls.Add(_editorTranslationTab);
         _translationModeTabs.Dock = DockStyle.Top;
-        _translationModeTabs.Location = new Point(0, 319);
+        _translationModeTabs.Location = new Point(0, 258);
         _translationModeTabs.Margin = new Padding(0, 8, 0, 0);
         _translationModeTabs.Name = "_translationModeTabs";
         _translationModeTabs.SelectedIndex = 0;
-        _translationModeTabs.Size = new Size(960, 190);
+        _translationModeTabs.Size = new Size(960, 346);
         _translationModeTabs.TabIndex = 10;
         // 
         // _singleFileTab
@@ -437,7 +457,7 @@ internal sealed partial class MainForm
         _singleFileTab.Location = new Point(4, 24);
         _singleFileTab.Name = "_singleFileTab";
         _singleFileTab.Padding = new Padding(8);
-        _singleFileTab.Size = new Size(952, 162);
+        _singleFileTab.Size = new Size(952, 318);
         _singleFileTab.TabIndex = 0;
         _singleFileTab.Text = "Single file";
         _singleFileTab.UseVisualStyleBackColor = true;
@@ -495,7 +515,7 @@ internal sealed partial class MainForm
         _folderBatchTab.Location = new Point(4, 24);
         _folderBatchTab.Name = "_folderBatchTab";
         _folderBatchTab.Padding = new Padding(8);
-        _folderBatchTab.Size = new Size(952, 162);
+        _folderBatchTab.Size = new Size(952, 318);
         _folderBatchTab.TabIndex = 1;
         _folderBatchTab.Text = "Folder batch";
         _folderBatchTab.UseVisualStyleBackColor = true;
@@ -525,7 +545,7 @@ internal sealed partial class MainForm
         _folderBatchLayout.RowStyles.Add(new RowStyle());
         _folderBatchLayout.RowStyles.Add(new RowStyle());
         _folderBatchLayout.RowStyles.Add(new RowStyle());
-        _folderBatchLayout.Size = new Size(936, 146);
+        _folderBatchLayout.Size = new Size(936, 302);
         _folderBatchLayout.TabIndex = 0;
         // 
         // _sourceFolderLabel
@@ -612,7 +632,7 @@ internal sealed partial class MainForm
         // 
         _batchOptionsLabel.Anchor = AnchorStyles.Left;
         _batchOptionsLabel.AutoSize = true;
-        _batchOptionsLabel.Location = new Point(3, 112);
+        _batchOptionsLabel.Location = new Point(3, 190);
         _batchOptionsLabel.Name = "_batchOptionsLabel";
         _batchOptionsLabel.Size = new Size(49, 15);
         _batchOptionsLabel.TabIndex = 3;
@@ -629,7 +649,7 @@ internal sealed partial class MainForm
         _batchOptionsPanel.Location = new Point(130, 93);
         _batchOptionsPanel.Margin = new Padding(0);
         _batchOptionsPanel.Name = "_batchOptionsPanel";
-        _batchOptionsPanel.Size = new Size(806, 53);
+        _batchOptionsPanel.Size = new Size(806, 209);
         _batchOptionsPanel.TabIndex = 5;
         // 
         // _includeSubfolders
@@ -669,11 +689,116 @@ internal sealed partial class MainForm
         _overwriteExisting.Text = "Overwrite existing target files";
         _overwriteExisting.UseVisualStyleBackColor = true;
         // 
+        // _editorTranslationTab
+        // 
+        _editorTranslationTab.Controls.Add(_editorTranslationLayout);
+        _editorTranslationTab.Location = new Point(4, 24);
+        _editorTranslationTab.Name = "_editorTranslationTab";
+        _editorTranslationTab.Padding = new Padding(8);
+        _editorTranslationTab.Size = new Size(952, 318);
+        _editorTranslationTab.TabIndex = 2;
+        _editorTranslationTab.Text = "In-Editor Translation";
+        _editorTranslationTab.UseVisualStyleBackColor = true;
+        // 
+        // _editorTranslationLayout
+        // 
+        _editorTranslationLayout.ColumnCount = 2;
+        _editorTranslationLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130F));
+        _editorTranslationLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        _editorTranslationLayout.Controls.Add(_editorContentTypeLabel, 0, 0);
+        _editorTranslationLayout.Controls.Add(_editorContentType, 1, 0);
+        _editorTranslationLayout.Controls.Add(_editorSourceLabel, 0, 1);
+        _editorTranslationLayout.Controls.Add(_editorSource, 1, 1);
+        _editorTranslationLayout.Controls.Add(_editorTranslationLabel, 0, 2);
+        _editorTranslationLayout.Controls.Add(_editorTranslation, 1, 2);
+        _editorTranslationLayout.Dock = DockStyle.Fill;
+        _editorTranslationLayout.Location = new Point(8, 8);
+        _editorTranslationLayout.Name = "_editorTranslationLayout";
+        _editorTranslationLayout.RowCount = 3;
+        _editorTranslationLayout.RowStyles.Add(new RowStyle());
+        _editorTranslationLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+        _editorTranslationLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+        _editorTranslationLayout.Size = new Size(936, 302);
+        _editorTranslationLayout.TabIndex = 0;
+        // 
+        // _editorContentTypeLabel
+        // 
+        _editorContentTypeLabel.Anchor = AnchorStyles.Left;
+        _editorContentTypeLabel.AutoSize = true;
+        _editorContentTypeLabel.Location = new Point(3, 8);
+        _editorContentTypeLabel.Name = "_editorContentTypeLabel";
+        _editorContentTypeLabel.Size = new Size(76, 15);
+        _editorContentTypeLabel.TabIndex = 0;
+        _editorContentTypeLabel.Text = "Content type";
+        // 
+        // _editorContentType
+        // 
+        _editorContentType.Dock = DockStyle.Left;
+        _editorContentType.DropDownStyle = ComboBoxStyle.DropDownList;
+        _editorContentType.FormattingEnabled = true;
+        _editorContentType.Items.AddRange(new object[] { "Plain text", "Markdown", "HTML" });
+        _editorContentType.Location = new Point(133, 4);
+        _editorContentType.Margin = new Padding(3, 4, 3, 4);
+        _editorContentType.Name = "_editorContentType";
+        _editorContentType.Size = new Size(180, 23);
+        _editorContentType.TabIndex = 0;
+        // 
+        // _editorSourceLabel
+        // 
+        _editorSourceLabel.Anchor = AnchorStyles.Left;
+        _editorSourceLabel.AutoSize = true;
+        _editorSourceLabel.Location = new Point(3, 91);
+        _editorSourceLabel.Name = "_editorSourceLabel";
+        _editorSourceLabel.Size = new Size(66, 15);
+        _editorSourceLabel.TabIndex = 1;
+        _editorSourceLabel.Text = "Source text";
+        // 
+        // _editorSource
+        // 
+        _editorSource.AcceptsReturn = true;
+        _editorSource.AcceptsTab = true;
+        _editorSource.Dock = DockStyle.Fill;
+        _editorSource.Location = new Point(133, 35);
+        _editorSource.Margin = new Padding(3, 4, 3, 4);
+        _editorSource.MaxLength = 100000000;
+        _editorSource.Multiline = true;
+        _editorSource.Name = "_editorSource";
+        _editorSource.ScrollBars = ScrollBars.Both;
+        _editorSource.Size = new Size(800, 127);
+        _editorSource.TabIndex = 1;
+        _editorSource.WordWrap = false;
+        // 
+        // _editorTranslationLabel
+        // 
+        _editorTranslationLabel.Anchor = AnchorStyles.Left;
+        _editorTranslationLabel.AutoSize = true;
+        _editorTranslationLabel.Location = new Point(3, 226);
+        _editorTranslationLabel.Name = "_editorTranslationLabel";
+        _editorTranslationLabel.Size = new Size(92, 15);
+        _editorTranslationLabel.TabIndex = 2;
+        _editorTranslationLabel.Text = "Translated result";
+        // 
+        // _editorTranslation
+        // 
+        _editorTranslation.AcceptsReturn = true;
+        _editorTranslation.AcceptsTab = true;
+        _editorTranslation.Dock = DockStyle.Fill;
+        _editorTranslation.Location = new Point(133, 170);
+        _editorTranslation.Margin = new Padding(3, 4, 3, 4);
+        _editorTranslation.MaxLength = 100000000;
+        _editorTranslation.Multiline = true;
+        _editorTranslation.Name = "_editorTranslation";
+        _editorTranslation.ReadOnly = true;
+        _editorTranslation.ScrollBars = ScrollBars.Both;
+        _editorTranslation.Size = new Size(800, 128);
+        _editorTranslation.TabIndex = 2;
+        _editorTranslation.WordWrap = false;
+        // 
         // _infoLabel
         // 
         _infoLabel.AutoSize = true;
         _infoLabel.Dock = DockStyle.Top;
-        _infoLabel.Location = new Point(0, 517);
+        _infoLabel.Location = new Point(0, 612);
         _infoLabel.Margin = new Padding(0, 8, 0, 8);
         _infoLabel.MaximumSize = new Size(930, 0);
         _infoLabel.Name = "_infoLabel";
@@ -685,13 +810,13 @@ internal sealed partial class MainForm
         // _log
         // 
         _log.Dock = DockStyle.Fill;
-        _log.Location = new Point(15, 566);
+        _log.Location = new Point(15, 661);
         _log.Margin = new Padding(3, 6, 3, 6);
         _log.Multiline = true;
         _log.Name = "_log";
         _log.ReadOnly = true;
         _log.ScrollBars = ScrollBars.Vertical;
-        _log.Size = new Size(954, 240);
+        _log.Size = new Size(954, 145);
         _log.TabIndex = 1;
         // 
         // _bottomLayout
@@ -789,6 +914,9 @@ internal sealed partial class MainForm
         _folderBatchLayout.PerformLayout();
         _batchOptionsPanel.ResumeLayout(false);
         _batchOptionsPanel.PerformLayout();
+        _editorTranslationTab.ResumeLayout(false);
+        _editorTranslationLayout.ResumeLayout(false);
+        _editorTranslationLayout.PerformLayout();
         _bottomLayout.ResumeLayout(false);
         _bottomLayout.PerformLayout();
         ResumeLayout(false);
