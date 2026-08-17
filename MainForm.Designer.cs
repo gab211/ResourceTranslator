@@ -360,7 +360,50 @@ internal sealed partial class MainForm
         _formLayout.SetColumnSpan(_language, 2);
         _language.Dock = DockStyle.Fill;
         _language.FormattingEnabled = true;
-        _language.Items.AddRange(new object[] { "English", "French", "Spanish", "Italian", "Dutch", "Polish", "Portuguese", "Danish", "Swedish", "Norwegian", "Finnish", "Czech", "Ukrainian", "Turkish", "Japanese", "Korean", "Simplified Chinese" });
+        _language.Items.AddRange(new object[]
+        {
+            "English",
+            "French",
+            "Spanish",
+            "Italian",
+            "German",
+            "Dutch",
+            "Polish",
+            "Portuguese",
+            "Danish",
+            "Swedish",
+            "Norwegian",
+            "Finnish",
+            "Icelandic",
+            "Irish",
+            "Estonian",
+            "Latvian",
+            "Lithuanian",
+            "Czech",
+            "Slovak",
+            "Slovenian",
+            "Croatian",
+            "Serbian",
+            "Bosnian",
+            "Montenegrin",
+            "Macedonian",
+            "Albanian",
+            "Romanian",
+            "Hungarian",
+            "Bulgarian",
+            "Greek",
+            "Ukrainian",
+            "Belarusian",
+            "Russian",
+            "Maltese",
+            "Luxembourgish",
+            "Turkish",
+            "Hausa",
+            "Swahili",
+            "Japanese",
+            "Korean",
+            "Simplified Chinese"
+        });
         _language.Location = new Point(153, 128);
         _language.Margin = new Padding(3, 4, 3, 4);
         _language.Name = "_language";
