@@ -460,6 +460,56 @@ internal sealed partial class MainForm : Form
 
             var file = TextFileData.Read(
                 _inputFile.Text);
+            string? existingResult = null;
+
+            if (File.Exists(saveDialog.FileName))
+            {
+                var existing = TextFileData.Read(saveDialog.FileName);
+                var compatible = StructureGuard.Validate(
+                    file.Text,
+                    existing.Text,
+                    out var compatibilityProblem);
+
+                if (compatible)
+                {
+                    var resumeAnswer = MessageBox.Show(
+                        this,
+                        "The selected output file has the same structure as the source " +
+                        "and appears to be a previous translation attempt." +
+                        Environment.NewLine + Environment.NewLine +
+                        "Do you want to continue using this existing result?",
+                        "Continue translation",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Question);
+
+                    if (resumeAnswer == DialogResult.Yes)
+                    {
+                        existingResult = existing.Text;
+                        Log("Existing compatible output loaded for continuation.");
+                    }
+                    else
+                    {
+                        return;
+                    }
+                }
+                else
+                {
+                    var overwriteAnswer = MessageBox.Show(
+                        this,
+                        "The existing output file does not match the source structure:" +
+                        Environment.NewLine + compatibilityProblem +
+                        Environment.NewLine + Environment.NewLine +
+                        "Do you want to overwrite it?",
+                        "Output file exists",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Warning);
+
+                    if (overwriteAnswer != DialogResult.Yes)
+                        return;
+
+                    Log("Existing incompatible output will be overwritten.");
+                }
+            }
 
             var chunks = Chunker.Create(
                 file.Text,
@@ -511,7 +561,7 @@ internal sealed partial class MainForm : Form
             // Create the target immediately. This guarantees that even a failure
             // before the first translated part cannot leave the user without a
             // recoverable result file.
-            SaveProgress(file.Text);
+            SaveProgress(existingResult ?? file.Text);
 
             if (DocumentTranslationService.Supports(_inputFile.Text))
             {
