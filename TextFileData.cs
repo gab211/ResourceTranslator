@@ -16,8 +16,52 @@ internal sealed record TextFileData(string Text, Encoding Encoding, bool HasBom,
     public void Write(string path, string text)
     {
         var normalized = text.Replace("\r\n", "\n").Replace("\r", "\n").Replace("\n", NewLine);
-        var body = Encoding.GetBytes(normalized);
-        var preamble = HasBom ? Encoding.GetPreamble() : Array.Empty<byte>();
+        var temporaryPath = path + ".rt-tmp-" + Guid.NewGuid().ToString("N");
+
+        try
+        {
+            WriteBytes(temporaryPath, Encoding, HasBom, normalized);
+            File.Move(temporaryPath, path, true);
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath))
+                File.Delete(temporaryPath);
+        }
+    }
+
+    public void WriteBestEffort(string path, string text)
+    {
+        try
+        {
+            Write(path, text);
+            return;
+        }
+        catch
+        {
+            // The result must still be persisted if the original encoding fails.
+        }
+
+        var normalized = text.Replace("\r\n", "\n").Replace("\r", "\n").Replace("\n", NewLine);
+        var fallback = new UTF8Encoding(HasBom, false);
+        var temporaryPath = path + ".rt-fallback-" + Guid.NewGuid().ToString("N");
+
+        try
+        {
+            WriteBytes(temporaryPath, fallback, HasBom, normalized);
+            File.Move(temporaryPath, path, true);
+        }
+        finally
+        {
+            if (File.Exists(temporaryPath))
+                File.Delete(temporaryPath);
+        }
+    }
+
+    private static void WriteBytes(string path, Encoding encoding, bool hasBom, string text)
+    {
+        var body = encoding.GetBytes(text);
+        var preamble = hasBom ? encoding.GetPreamble() : Array.Empty<byte>();
         using var stream = File.Create(path);
         if (preamble.Length > 0) stream.Write(preamble);
         stream.Write(body);

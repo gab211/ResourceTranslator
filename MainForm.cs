@@ -421,6 +421,9 @@ internal sealed partial class MainForm : Form
 
     private async Task StartSingleFileTranslationAsync()
     {
+        string? outputPath = null;
+        string? lastSavedResult = null;
+
         try
         {
             ValidateCommonApiFields();
@@ -442,6 +445,8 @@ internal sealed partial class MainForm : Form
 
             if (saveDialog.ShowDialog(this) != DialogResult.OK)
                 return;
+
+            outputPath = saveDialog.FileName;
 
             SaveSettings();
 
@@ -487,6 +492,26 @@ internal sealed partial class MainForm : Form
 
             string translated;
             TranslationRunReport? translationReport;
+            void SaveProgress(string result)
+            {
+                if (string.IsNullOrEmpty(result))
+                    return;
+
+                lastSavedResult = result;
+                try
+                {
+                    file.WriteBestEffort(saveDialog.FileName, result);
+                }
+                catch (Exception saveException)
+                {
+                    Log($"WARNING: Could not save partial result: {saveException.Message}");
+                }
+            }
+
+            // Create the target immediately. This guarantees that even a failure
+            // before the first translated part cannot leave the user without a
+            // recoverable result file.
+            SaveProgress(file.Text);
 
             if (DocumentTranslationService.Supports(_inputFile.Text))
             {
@@ -506,7 +531,8 @@ internal sealed partial class MainForm : Form
                     _apiKey.Text.Trim(),
                     _model.Text.Trim(),
                     progress,
-                    _cts.Token);
+                    _cts.Token,
+                    partialDocumentProgress: new Progress<string>(SaveProgress));
 
                 translated = outcome.Text;
                 translationReport = outcome.Report;
@@ -530,12 +556,14 @@ internal sealed partial class MainForm : Form
                         _model.Text.Trim(),
                         progress,
                         _cts.Token,
-                        saveDialog.FileName);
+                        saveDialog.FileName,
+                        new Progress<string>(SaveProgress));
 
                 translationReport = engine.LastRunReport;
             }
 
-            file.Write(
+            lastSavedResult = translated;
+            file.WriteBestEffort(
                 saveDialog.FileName,
                 translated);
 
@@ -553,6 +581,22 @@ internal sealed partial class MainForm : Form
         }
         catch (Exception ex)
         {
+            // The translation may have completed most of its work before a final
+            // JSON/encoding error. Preserve the latest available result.
+            try
+            {
+                if (!string.IsNullOrWhiteSpace(outputPath) &&
+                    !string.IsNullOrEmpty(lastSavedResult))
+                {
+                    var fallbackFile = TextFileData.Read(_inputFile.Text);
+                    fallbackFile.WriteBestEffort(outputPath, lastSavedResult);
+                    Log($"Partial result preserved: {outputPath}");
+                }
+            }
+            catch
+            {
+                // Do not hide the original error while reporting it.
+            }
             ShowError(ex);
         }
         finally
