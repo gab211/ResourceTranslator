@@ -80,6 +80,7 @@ internal sealed partial class MainForm : Form
                 : "OpenAI";
 
         _baseUrl.Text = _settings.ApiBaseUrl;
+        _apiKey.Text = _settings.GetApiKey();
         _model.Text = _settings.Model;
         _language.Text = _settings.TargetLanguage;
 
@@ -132,6 +133,7 @@ internal sealed partial class MainForm : Form
     {
         _settings.Provider = SelectedProvider;
         _settings.ApiBaseUrl = _baseUrl.Text.Trim();
+        _settings.SetApiKey(_apiKey.Text);
         _settings.Model = _model.Text.Trim();
         _settings.TargetLanguage = _language.Text.Trim();
         _settings.ChunkSize = (int)_chunkSize.Value;

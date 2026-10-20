@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace ResourceTranslator;
 
@@ -7,6 +9,7 @@ internal sealed class AppSettings
     public string TranslationMode { get; set; } = "SingleFile";
     public ApiProvider Provider { get; set; } = ApiProvider.OpenAI;
     public string ApiBaseUrl { get; set; } = "https://api.openai.com/v1";
+    public string ProtectedApiKey { get; set; } = string.Empty;
     public string Model { get; set; } = "gpt-5-mini";
     public string TargetLanguage { get; set; } = "English";
     public int ChunkSize { get; set; } = 12000;
@@ -58,5 +61,39 @@ internal sealed class AppSettings
                 {
                     WriteIndented = true
                 }));
+    }
+
+    public string GetApiKey()
+    {
+        if (string.IsNullOrEmpty(ProtectedApiKey))
+            return string.Empty;
+
+        try
+        {
+            return Encoding.UTF8.GetString(
+                ProtectedData.Unprotect(
+                    Convert.FromBase64String(ProtectedApiKey),
+                    optionalEntropy: null,
+                    DataProtectionScope.CurrentUser));
+        }
+        catch (CryptographicException)
+        {
+            return string.Empty;
+        }
+        catch (FormatException)
+        {
+            return string.Empty;
+        }
+    }
+
+    public void SetApiKey(string apiKey)
+    {
+        ProtectedApiKey = string.IsNullOrEmpty(apiKey)
+            ? string.Empty
+            : Convert.ToBase64String(
+                ProtectedData.Protect(
+                    Encoding.UTF8.GetBytes(apiKey),
+                    optionalEntropy: null,
+                    DataProtectionScope.CurrentUser));
     }
 }
