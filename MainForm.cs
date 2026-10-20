@@ -12,10 +12,12 @@ internal sealed partial class MainForm : Form
     private readonly AppSettings _settings;
     private readonly OpenAiClient _client = new();
     private CancellationTokenSource? _cts;
+    private readonly TextBox _glossaryText = new() { Multiline = true, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill };
 
     public MainForm()
     {
         InitializeComponent();
+        AddGlossaryControls();
 
         _settings = AppSettings.Load();
 
@@ -96,6 +98,7 @@ internal sealed partial class MainForm : Form
 
         _customInstruction.Text =
             _settings.CustomInstruction;
+        _glossaryText.Text = _settings.GlossaryText;
 
         _inputFile.Text =
             File.Exists(_settings.LastInputFile)
@@ -139,7 +142,9 @@ internal sealed partial class MainForm : Form
         _settings.ChunkSize = (int)_chunkSize.Value;
         _settings.ContextLines = (int)_contextLines.Value;
         _settings.CustomInstruction = _customInstruction.Text;
+        _settings.GlossaryText = _settings.GlossaryText ?? string.Empty;
 
+        _settings.GlossaryText = Glossary.Export(Glossary.Parse(_settings.GlossaryText).Entries);
         _settings.TranslationMode =
             CurrentTranslationMode.ToString();
 
@@ -155,6 +160,35 @@ internal sealed partial class MainForm : Form
         _settings.OverwriteExistingFiles = _overwriteExisting.Checked;
 
         _settings.Save();
+    }
+
+    private void AddGlossaryControls()
+    {
+        var panel = new Panel { Dock = DockStyle.Top, Height = 150, Padding = new Padding(0, 4, 0, 4) };
+        var label = new Label { Text = "Optional glossary (KEEP / TRANSLATE; tab-separated)", Dock = DockStyle.Top, Height = 22 };
+        var buttons = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 34, FlowDirection = FlowDirection.LeftToRight };
+        Button Button(string text, Action action) { var b = new Button { Text = text, AutoSize = true }; b.Click += (_, _) => action(); return b; }
+        buttons.Controls.Add(Button("Copy", () => { var export = Glossary.Export(Glossary.Parse(_settings.GlossaryText).Entries); if (export.Length > 0) Clipboard.SetText(export); }));
+        buttons.Controls.Add(Button("Paste", () => { if (Clipboard.ContainsText()) _glossaryText.Text = Clipboard.GetText(); }));
+        buttons.Controls.Add(Button("Validate", ValidateGlossary));
+        buttons.Controls.Add(Button("Apply", ApplyGlossary));
+        panel.Controls.Add(_glossaryText); panel.Controls.Add(buttons); panel.Controls.Add(label);
+        _topLayout.Controls.Add(panel, 0, 3);
+    }
+
+    private void ValidateGlossary()
+    {
+        var parsed = Glossary.Parse(_glossaryText.Text);
+        MessageBox.Show(this, parsed.IsValid ? $"Valid glossary: {parsed.Entries.Count} entries." : string.Join(Environment.NewLine, parsed.Errors), "Glossary validation", MessageBoxButtons.OK, parsed.IsValid ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+    }
+
+    private void ApplyGlossary()
+    {
+        var parsed = Glossary.Parse(_glossaryText.Text);
+        if (!parsed.IsValid) { MessageBox.Show(this, string.Join(Environment.NewLine, parsed.Errors), "Glossary not applied", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+        _settings.GlossaryText = Glossary.Export(parsed.Entries);
+        SaveSettings();
+        Log($"Applied glossary ({parsed.Entries.Count} entries).");
     }
 
     private void SelectInputFile()
@@ -584,7 +618,9 @@ internal sealed partial class MainForm : Form
                     _model.Text.Trim(),
                     progress,
                     _cts.Token,
-                    partialDocumentProgress: new Progress<string>(SaveProgress));
+                    partialDocumentProgress: new Progress<string>(SaveProgress),
+                    glossary: Glossary.Parse(_settings.GlossaryText).Entries,
+                    partialResultProgress: null);
 
                 translated = outcome.Text;
                 translationReport = outcome.Report;
@@ -609,7 +645,8 @@ internal sealed partial class MainForm : Form
                         progress,
                         _cts.Token,
                         saveDialog.FileName,
-                        new Progress<string>(SaveProgress));
+                        new Progress<string>(SaveProgress),
+                        Glossary.Parse(_settings.GlossaryText).Entries);
 
                 translationReport = engine.LastRunReport;
             }
@@ -703,7 +740,8 @@ internal sealed partial class MainForm : Form
                 SelectedProvider,
                 _baseUrl.Text.Trim(),
                 _apiKey.Text.Trim(),
-                _model.Text.Trim());
+                _model.Text.Trim(),
+                Glossary.Parse(_settings.GlossaryText).Entries);
 
             Log($"Source folder: {options.SourceFolder}");
             Log($"Target folder: {options.TargetFolder}");

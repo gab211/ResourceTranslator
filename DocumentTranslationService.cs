@@ -143,7 +143,9 @@ internal sealed class DocumentTranslationService(OpenAiClient client)
         IProgress<TranslationProgress> progress,
         CancellationToken ct,
         DocumentContentType? contentType = null,
-        IProgress<string>? partialDocumentProgress = null)
+        IProgress<string>? partialResultProgress = null,
+        IProgress<string>? partialDocumentProgress = null,
+        IReadOnlyList<GlossaryEntry>? glossary = null)
     {
         var resolvedContentType = ResolveContentType(
             fileName,
@@ -210,7 +212,7 @@ internal sealed class DocumentTranslationService(OpenAiClient client)
             progress,
             ct,
             outputFilePath,
-            partialDocumentProgress is null
+            partialResultProgress is null || partialDocumentProgress is null
                 ? null
                 : new Progress<string>(translatedPartialResource =>
                 {
@@ -223,7 +225,8 @@ internal sealed class DocumentTranslationService(OpenAiClient client)
                             source,
                             segments,
                             partialValues));
-                }));
+                }),
+            glossary);
 
         var translatedValues = ParseTranslatedResource(
             translatedResource,

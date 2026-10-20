@@ -16,7 +16,8 @@ internal sealed record BatchTranslationOptions(
     ApiProvider Provider,
     string BaseUrl,
     string ApiKey,
-    string Model);
+    string Model,
+    IReadOnlyList<GlossaryEntry>? Glossary = null);
 
 internal sealed record BatchTranslationProgress(
     int CompletedFiles,
@@ -293,7 +294,8 @@ internal sealed class BatchTranslationService(OpenAiClient client)
                     options.ApiKey,
                     options.Model,
                     fileProgress,
-                    ct);
+                    ct,
+                    glossary: options.Glossary);
 
                 translated = outcome.Text;
                 translationReport = outcome.Report;
@@ -315,7 +317,8 @@ internal sealed class BatchTranslationService(OpenAiClient client)
                     options.Model,
                     fileProgress,
                     ct,
-                    targetPath);
+                    targetPath,
+                    glossary: options.Glossary);
 
                 translationReport = engine.LastRunReport;
             }

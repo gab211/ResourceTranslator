@@ -131,12 +131,13 @@ internal sealed class TranslationEngine(OpenAiClient client)
         IProgress<TranslationProgress> progress,
         CancellationToken ct,
         string? outputFilePath = null,
-        IProgress<string>? partialResultProgress = null)
+        IProgress<string>? partialResultProgress = null,
+        IReadOnlyList<GlossaryEntry>? glossary = null)
     {
         return await TranslateAsync(
             source, fileName, targetLanguage, string.Empty, customInstruction,
             chunkSize, contextLines, provider, baseUrl, apiKey, model,
-            progress, ct, outputFilePath, partialResultProgress);
+            progress, ct, outputFilePath, partialResultProgress, glossary);
     }
 
     public async Task<string> TranslateAsync(
@@ -154,12 +155,13 @@ internal sealed class TranslationEngine(OpenAiClient client)
         IProgress<TranslationProgress> progress,
         CancellationToken ct,
         string? outputFilePath = null,
-        IProgress<string>? partialResultProgress = null)
+        IProgress<string>? partialResultProgress = null,
+        IReadOnlyList<GlossaryEntry>? glossary = null)
     {
         return await TranslateCoreAsync(
             source, fileName, targetLanguage, documentInstruction, customInstruction,
             chunkSize, contextLines, provider, baseUrl, apiKey, model,
-            progress, ct, outputFilePath, partialResultProgress);
+            progress, ct, outputFilePath, partialResultProgress, glossary);
     }
 
     private async Task<string> TranslateCoreAsync(
@@ -177,7 +179,8 @@ internal sealed class TranslationEngine(OpenAiClient client)
         IProgress<TranslationProgress> progress,
         CancellationToken ct,
         string? outputFilePath,
-        IProgress<string>? partialResultProgress)
+        IProgress<string>? partialResultProgress,
+        IReadOnlyList<GlossaryEntry>? glossary)
     {
         var startedAt = DateTimeOffset.Now;
 
@@ -220,7 +223,8 @@ internal sealed class TranslationEngine(OpenAiClient client)
                     baseUrl,
                     apiKey,
                     model,
-                    ct);
+                    ct,
+                    glossary);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -337,7 +341,8 @@ internal sealed class TranslationEngine(OpenAiClient client)
         string baseUrl,
         string apiKey,
         string model,
-        CancellationToken ct)
+        CancellationToken ct,
+        IReadOnlyList<GlossaryEntry>? glossary)
     {
         if (IsStructuredResourceFile(fileName))
         {
@@ -359,12 +364,13 @@ internal sealed class TranslationEngine(OpenAiClient client)
                 fileName,
                 targetLanguage,
                 string.Empty,
-                customInstruction,
+                documentInstruction,
                 provider,
                 baseUrl,
                 apiKey,
                 model,
-                ct);
+                ct,
+                glossary);
         }
 
         return await TranslateWholeLineChunk(
@@ -377,7 +383,8 @@ internal sealed class TranslationEngine(OpenAiClient client)
             baseUrl,
             apiKey,
             model,
-            ct);
+            ct,
+            glossary);
     }
 
     private async Task<ChunkTranslationResult> TranslateStructuredChunk(
@@ -392,7 +399,8 @@ internal sealed class TranslationEngine(OpenAiClient client)
         string baseUrl,
         string apiKey,
         string model,
-        CancellationToken ct)
+        CancellationToken ct,
+        IReadOnlyList<GlossaryEntry>? glossary)
     {
         var preparedSegments = segments
             .Select(
@@ -401,7 +409,8 @@ internal sealed class TranslationEngine(OpenAiClient client)
                         segment,
                         PrepareText(
                             segment.SourceText,
-                            index)))
+                            index,
+                            glossary)))
             .ToArray();
 
         /*
@@ -435,6 +444,7 @@ internal sealed class TranslationEngine(OpenAiClient client)
                     targetLanguage,
                     documentInstruction,
                     customInstruction,
+                    Glossary.BuildInstruction(glossary ?? Array.Empty<GlossaryEntry>()),
                     lastBatchProblem);
 
                 raw = await client.TranslateAsync(
@@ -564,6 +574,7 @@ internal sealed class TranslationEngine(OpenAiClient client)
                     fileName,
                     targetLanguage,
                     customInstruction,
+                    glossary,
                     provider,
                     baseUrl,
                     apiKey,
@@ -654,6 +665,7 @@ internal sealed class TranslationEngine(OpenAiClient client)
             string fileName,
             string targetLanguage,
             string customInstruction,
+            IReadOnlyList<GlossaryEntry>? glossary,
             ApiProvider provider,
             string baseUrl,
             string apiKey,
@@ -669,6 +681,7 @@ internal sealed class TranslationEngine(OpenAiClient client)
                 targetLanguage,
                 string.Empty,
                 customInstruction,
+                Glossary.BuildInstruction(glossary ?? Array.Empty<GlossaryEntry>()),
                 "Translate this single value. Preserve every protected " +
                 "marker exactly.");
 
@@ -706,6 +719,7 @@ internal sealed class TranslationEngine(OpenAiClient client)
                     targetLanguage,
                     string.Empty,
                     customInstruction,
+                    Glossary.BuildInstruction(glossary ?? Array.Empty<GlossaryEntry>()),
                     "The previous attempt returned the source text " +
                     "unchanged. Translate it more freely into the target " +
                     "language and paraphrase naturally if needed. " +
@@ -829,12 +843,13 @@ internal sealed class TranslationEngine(OpenAiClient client)
         string baseUrl,
         string apiKey,
         string model,
-        CancellationToken ct)
+        CancellationToken ct,
+        IReadOnlyList<GlossaryEntry>? glossary)
     {
         var preparedLines = chunk.Lines
             .Select(
                 (line, index) =>
-                    PrepareText(line, index))
+                    PrepareText(line, index, glossary))
             .ToArray();
 
         var translatedLines = chunk.Lines.ToArray();
@@ -867,6 +882,7 @@ internal sealed class TranslationEngine(OpenAiClient client)
                     fileName,
                     targetLanguage,
                     customInstruction,
+                    Glossary.BuildInstruction(glossary ?? Array.Empty<GlossaryEntry>()),
                     lastBatchProblem);
 
                 raw = await client.TranslateAsync(
@@ -1573,7 +1589,8 @@ internal sealed class TranslationEngine(OpenAiClient client)
 
     private static PreparedText PrepareText(
         string text,
-        int ownerIndex)
+        int ownerIndex,
+        IReadOnlyList<GlossaryEntry>? glossary = null)
     {
         var leadingWhitespace =
             GetLeadingWhitespace(text);
@@ -1598,6 +1615,10 @@ internal sealed class TranslationEngine(OpenAiClient client)
 
         var protectedTokens =
             new List<ProtectedToken>();
+
+        var keep = new List<(string Marker, string Value)>();
+        sourceCore = Glossary.MaskKeepTerms(sourceCore, glossary ?? Array.Empty<GlossaryEntry>(), keep);
+        protectedTokens.AddRange(keep.Select(t => new ProtectedToken(t.Marker, t.Value)));
 
         var promptText = ProtectedTokenRegex.Replace(
             sourceCore,
@@ -1821,6 +1842,7 @@ internal sealed class TranslationEngine(OpenAiClient client)
         string targetLanguage,
         string documentInstruction,
         string customInstruction,
+        string glossaryInstruction,
         string? retryProblem)
     {
         var contextBefore = string.Join(
@@ -1875,6 +1897,7 @@ TRANSLATION RULES:
 {{(string.IsNullOrWhiteSpace(customInstruction)
         ? ""
         : "CUSTOM ADDITIONAL INSTRUCTIONS:\n" + customInstruction)}}
+{{(string.IsNullOrWhiteSpace(glossaryInstruction) ? "" : "\n" + glossaryInstruction)}}
 {{(retryProblem is null
         ? ""
         : "The previous output was rejected because: " + retryProblem)}}
@@ -1902,6 +1925,7 @@ CONTEXT_AFTER
         string fileName,
         string targetLanguage,
         string customInstruction,
+        string glossaryInstruction,
         string? retryProblem)
     {
         var contextBefore = string.Join(
@@ -1946,6 +1970,7 @@ TRANSLATION RULES:
 {{(string.IsNullOrWhiteSpace(customInstruction)
         ? ""
         : "Additional instruction: " + customInstruction)}}
+{{(string.IsNullOrWhiteSpace(glossaryInstruction) ? "" : "\n" + glossaryInstruction)}}
 {{(retryProblem is null
         ? ""
         : "The previous output was rejected because: " + retryProblem)}}

@@ -15,6 +15,7 @@ internal sealed class AppSettings
     public int ChunkSize { get; set; } = 12000;
     public int ContextLines { get; set; } = 3;
     public string CustomInstruction { get; set; } = string.Empty;
+    public string GlossaryText { get; set; } = string.Empty;
 
     public bool UseFolderBatch { get; set; }
     public string LastInputFile { get; set; } = string.Empty;
