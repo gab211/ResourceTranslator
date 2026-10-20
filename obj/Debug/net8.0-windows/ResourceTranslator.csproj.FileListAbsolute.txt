@@ -15,3 +15,7 @@ C:\Users\crs\source\GitHub\ResourceTranslator\obj\Debug\net8.0-windows\refint\Re
 C:\Users\crs\source\GitHub\ResourceTranslator\obj\Debug\net8.0-windows\ResourceTranslator.pdb
 C:\Users\crs\source\GitHub\ResourceTranslator\obj\Debug\net8.0-windows\ResourceTranslator.genruntimeconfig.cache
 C:\Users\crs\source\GitHub\ResourceTranslator\obj\Debug\net8.0-windows\ref\ResourceTranslator.dll
+C:\Users\crs\source\GitHub\ResourceTranslator\obj\verify-build\ResourceTranslator.deps.json
+C:\Users\crs\source\GitHub\ResourceTranslator\obj\verify-build\ResourceTranslator.runtimeconfig.json
+C:\Users\crs\source\GitHub\ResourceTranslator\obj\verify-build\ResourceTranslator.dll
+C:\Users\crs\source\GitHub\ResourceTranslator\obj\verify-build\ResourceTranslator.pdb

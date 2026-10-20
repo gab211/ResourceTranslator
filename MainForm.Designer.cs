@@ -402,6 +402,8 @@ internal sealed partial class MainForm
             "Swahili",
             "Japanese",
             "Korean",
+            "Arabic",
+            "Interslavic",            
             "Simplified Chinese"
         });
         _language.Location = new Point(153, 128);

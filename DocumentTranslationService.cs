@@ -178,11 +178,7 @@ internal sealed class DocumentTranslationService(OpenAiClient client)
 
         var documentInstruction =
             "The values are visible text fragments extracted from a Hugo " +
-            "Markdown or HTML document. Preserve Markdown inline syntax, " +
-            "Hugo template markers, HTML fragments and protected placeholders " +
-            "exactly. Do not add headings, list markers or punctuation that " +
-            "is not present in the value. Do not translate CSS stylesheets, " +
-            "JavaScript code, or inline code blocks.";
+            "Markdown or HTML document.";
 
         if (segments.Any(segment => segment.OriginalText.Length < 80))
         {
@@ -196,9 +192,7 @@ internal sealed class DocumentTranslationService(OpenAiClient client)
 
         if (!string.IsNullOrWhiteSpace(customInstruction))
         {
-            documentInstruction +=
-                Environment.NewLine +
-                customInstruction;
+            // Passed separately so the prompt can label custom instructions distinctly.
         }
 
         var translatedResource = await engine.TranslateAsync(
@@ -206,6 +200,7 @@ internal sealed class DocumentTranslationService(OpenAiClient client)
             Path.GetFileName(fileName) + ".segments.json",
             targetLanguage,
             documentInstruction,
+            customInstruction,
             chunkSize,
             contextLines,
             provider,

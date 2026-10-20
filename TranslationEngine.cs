@@ -133,6 +133,52 @@ internal sealed class TranslationEngine(OpenAiClient client)
         string? outputFilePath = null,
         IProgress<string>? partialResultProgress = null)
     {
+        return await TranslateAsync(
+            source, fileName, targetLanguage, string.Empty, customInstruction,
+            chunkSize, contextLines, provider, baseUrl, apiKey, model,
+            progress, ct, outputFilePath, partialResultProgress);
+    }
+
+    public async Task<string> TranslateAsync(
+        string source,
+        string fileName,
+        string targetLanguage,
+        string documentInstruction,
+        string customInstruction,
+        int chunkSize,
+        int contextLines,
+        ApiProvider provider,
+        string baseUrl,
+        string apiKey,
+        string model,
+        IProgress<TranslationProgress> progress,
+        CancellationToken ct,
+        string? outputFilePath = null,
+        IProgress<string>? partialResultProgress = null)
+    {
+        return await TranslateCoreAsync(
+            source, fileName, targetLanguage, documentInstruction, customInstruction,
+            chunkSize, contextLines, provider, baseUrl, apiKey, model,
+            progress, ct, outputFilePath, partialResultProgress);
+    }
+
+    private async Task<string> TranslateCoreAsync(
+        string source,
+        string fileName,
+        string targetLanguage,
+        string documentInstruction,
+        string customInstruction,
+        int chunkSize,
+        int contextLines,
+        ApiProvider provider,
+        string baseUrl,
+        string apiKey,
+        string model,
+        IProgress<TranslationProgress> progress,
+        CancellationToken ct,
+        string? outputFilePath,
+        IProgress<string>? partialResultProgress)
+    {
         var startedAt = DateTimeOffset.Now;
 
         var chunks = Chunker.Create(
@@ -169,6 +215,7 @@ internal sealed class TranslationEngine(OpenAiClient client)
                     fileName,
                     targetLanguage,
                     customInstruction,
+                    documentInstruction,
                     provider,
                     baseUrl,
                     apiKey,
@@ -285,6 +332,7 @@ internal sealed class TranslationEngine(OpenAiClient client)
         string fileName,
         string targetLanguage,
         string customInstruction,
+        string documentInstruction,
         ApiProvider provider,
         string baseUrl,
         string apiKey,
@@ -310,6 +358,7 @@ internal sealed class TranslationEngine(OpenAiClient client)
                 segments,
                 fileName,
                 targetLanguage,
+                string.Empty,
                 customInstruction,
                 provider,
                 baseUrl,
@@ -338,6 +387,7 @@ internal sealed class TranslationEngine(OpenAiClient client)
         string fileName,
         string targetLanguage,
         string customInstruction,
+        string documentInstruction,
         ApiProvider provider,
         string baseUrl,
         string apiKey,
@@ -383,6 +433,7 @@ internal sealed class TranslationEngine(OpenAiClient client)
                     preparedSegments,
                     fileName,
                     targetLanguage,
+                    documentInstruction,
                     customInstruction,
                     lastBatchProblem);
 
@@ -616,6 +667,7 @@ internal sealed class TranslationEngine(OpenAiClient client)
                 new[] { preparedSegment },
                 fileName,
                 targetLanguage,
+                string.Empty,
                 customInstruction,
                 "Translate this single value. Preserve every protected " +
                 "marker exactly.");
@@ -652,6 +704,7 @@ internal sealed class TranslationEngine(OpenAiClient client)
                     new[] { preparedSegment },
                     fileName,
                     targetLanguage,
+                    string.Empty,
                     customInstruction,
                     "The previous attempt returned the source text " +
                     "unchanged. Translate it more freely into the target " +
@@ -1766,6 +1819,7 @@ internal sealed class TranslationEngine(OpenAiClient client)
         IReadOnlyList<PreparedSegment> segments,
         string fileName,
         string targetLanguage,
+        string documentInstruction,
         string customInstruction,
         string? retryProblem)
     {
@@ -1785,14 +1839,14 @@ internal sealed class TranslationEngine(OpenAiClient client)
                     segment.Text.PromptText));
 
         return $$"""
-Translate every resource value below into {{targetLanguage}}.
+Translate every resource value below into {{(targetLanguage.Equals("isv", StringComparison.OrdinalIgnoreCase) ? "Interslavic (Medžuslovjansky, ISO 639-3: isv)" : targetLanguage)}}.
 
 The source file is {{fileName}}.
 
 You receive only human-readable inner values.
 Keys, comments, indentation, quotes, commas, semicolons, and file syntax are managed by the application.
 
-STRICT OUTPUT FORMAT:
+FORMAT AND PROTECTION RULES:
 - Return exactly one line for every input item.
 - Every output line must begin with its original @@ITEM_XXXX@@ marker.
 - Preserve every item marker exactly.
@@ -1815,9 +1869,12 @@ TRANSLATION RULES:
 - Do not add backslashes before apostrophes or quotation marks.
 - Preserve product names and technical terms where appropriate.
 - Do not summarize, improve, shorten, expand, or explain the text.
+{{(string.IsNullOrWhiteSpace(documentInstruction)
+        ? ""
+        : "DOCUMENT INSTRUCTIONS:\n" + documentInstruction)}}
 {{(string.IsNullOrWhiteSpace(customInstruction)
         ? ""
-        : "Additional instruction: " + customInstruction)}}
+        : "CUSTOM ADDITIONAL INSTRUCTIONS:\n" + customInstruction)}}
 {{(retryProblem is null
         ? ""
         : "The previous output was rejected because: " + retryProblem)}}
